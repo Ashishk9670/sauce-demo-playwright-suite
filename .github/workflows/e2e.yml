@@ -54,7 +54,7 @@ jobs:
           retention-days: 14
 
   allure-report:
-    name: Publish merged Allure report
+    name: Generate merged Allure report
     needs: e2e
     if: always()
     runs-on: ubuntu-latest
@@ -68,6 +68,14 @@ jobs:
           pattern: allure-results-*
           path: allure-results-merged
           merge-multiple: true
+
+      - name: Fetch previous report's history (for trend widgets)
+        continue-on-error: true
+        run: |
+          git fetch origin gh-pages --depth=1 2>/dev/null && \
+          git checkout origin/gh-pages -- history && \
+          mkdir -p allure-results-merged/history && \
+          cp -r history/* allure-results-merged/history/ || echo "No previous history yet — first run."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -87,3 +95,24 @@ jobs:
           name: allure-report
           path: allure-report/
           retention-days: 14
+
+  publish-report:
+    name: Publish Allure report to GitHub Pages
+    needs: allure-report
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download merged Allure report
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report
+          publish_branch: gh-pages
